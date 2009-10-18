@@ -1,15 +1,36 @@
 #
 
 from twisted.internet.task import coiterate
+from twisted.internet import defer
 from twisted.python.filepath import FilePath
 from distfs.error import NoSuchChunkError
 from distfs import idistfs
 from zope.interface import implements
 
 import hashlib
+import errno
 
 """Storage for chunks of data.
 """
+
+
+def publishChunks(store, publisher):
+    """
+    Iterate through all chunks in the C{store} and publish
+    them to the overlay using the given publisher.
+
+    @type store: L{IStore}
+    @type publisher: L{IPublisher}
+
+    @return: a L{Deferred} that will be called when the
+        all chunks in the store has been published.
+    @rtype: L{Deferred}
+    """
+    ds = list()
+    for chunkName in store.iterChunks():
+        ds.append(publisher.publish(chunkName))
+    return defer.DeferredList(ds)
+
 
 class PumpIterator(object):
 
@@ -87,6 +108,21 @@ class FileSystemStore(object):
     def __init__(self, dir):
         self.dir = FilePath(dir)
         self.computes = dict()
+        try:
+            self.dir.createDirectory()
+        except OSError, e:
+            if e.errno == errno.EEXIST:
+                return
+            raise
+
+    def iterChunks(self):
+        """
+        Iterate through all available chunks.
+        """
+        names = self.dir.listdir()
+        for name in names:
+            if name.endswith('.hash') and ('%s.data' % name[:-5]) in names:
+                yield name[:-5]
 
     def hasChunk(self, chunkName):
         """

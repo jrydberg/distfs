@@ -38,7 +38,8 @@ class Node(object):
     In Entangled, all interactions with the Kademlia network by a client
     application is performed via this class (or a subclass). 
     """
-    def __init__(self, udpPort=4000, dataStore=None, routingTable=None, networkProtocol=None):
+    def __init__(self, udpPort=4000, dataStore=None, routingTable=None, networkProtocol=None,
+                 reactor=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -58,6 +59,9 @@ class Node(object):
                                 being transmitted.
         @type networkProtocol: entangled.kademlia.protocol.KademliaProtocol
         """
+        if reactor is None:
+            reactor = twisted.internet.reactor
+        self.reactor = reactor
         self.id = self._generateID()
         self.port = udpPort
         # This will contain a deferred created when joining the network, to enable publishing/retrieving information from
@@ -103,7 +107,7 @@ class Node(object):
         @type knownNodeAddresses: tuple
         """
         # Prepare the underlying Kademlia protocol
-        twisted.internet.reactor.listenUDP(self.port, self._protocol) #IGNORE:E1101
+        self.reactor.listenUDP(self.port, self._protocol) #IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
         if knownNodeAddresses != None:
             bootstrapContacts = []
@@ -125,7 +129,7 @@ class Node(object):
         #protocol.reactor.callLater(10, self.printContacts)
         self._joinDeferred.addCallback(self._persistState)
         # Start refreshing k-buckets periodically, if necessary
-        twisted.internet.reactor.callLater(constants.checkRefreshInterval, self._refreshNode) #IGNORE:E1101
+        self.reactor.callLater(constants.checkRefreshInterval, self._refreshNode) #IGNORE:E1101
         #twisted.internet.reactor.run()
 
 
@@ -570,7 +574,7 @@ class Node(object):
                 or (len(shortlist) < constants.k and len(activeContacts) < len(shortlist) and len(activeProbes) > 0):
                 #print '----------- scheduling next call -------------'
                 # Schedule the next iteration if there are any active calls (Kademlia uses loose parallelism)
-                call = twisted.internet.reactor.callLater(constants.iterativeLookupDelay, searchIteration) #IGNORE:E1101
+                call = self.reactor.callLater(constants.iterativeLookupDelay, searchIteration) #IGNORE:E1101
                 pendingIterationCalls.append(call)
             # Check for a quick contact response that made an update to the shortList
             elif prevShortlistLength < len(shortlist):
@@ -699,7 +703,7 @@ class Node(object):
 
     def _scheduleNextNodeRefresh(self, *args):
         #print '==== sheduling next refresh'
-        twisted.internet.reactor.callLater(constants.checkRefreshInterval, self._refreshNode)
+        self.reactor.callLater(constants.checkRefreshInterval, self._refreshNode)
 
     def _threadedRepublishData(self, *args):
         """ Republishes and expires any stored data (i.e. stored
@@ -723,7 +727,7 @@ class Node(object):
                 if age >= constants.dataExpireTimeout:
                     #print '    REPUBLISHING key:', key
                     #self.iterativeStore(key, self._dataStore[key])
-                    twisted.internet.reactor.callFromThread(self.iterativeStore, key, self._dataStore[key])
+                    self.reactor.callFromThread(self.iterativeStore, key, self._dataStore[key])
             else:
                 # This node needs to replicate the data at set intervals,
                 # until it expires, without changing the metadata associated with it
@@ -736,7 +740,7 @@ class Node(object):
                     # ...data has not yet expired, and we need to replicate it
                     #print '    replicating key:', key,'age:',age
                     #self.iterativeStore(key=key, value=self._dataStore[key], originalPublisherID=originalPublisherID, age=age)
-                    twisted.internet.reactor.callFromThread(self.iterativeStore, key=key, value=self._dataStore[key], originalPublisherID=originalPublisherID, age=age)
+                    self.reactor.callFromThread(self.iterativeStore, key=key, value=self._dataStore[key], originalPublisherID=originalPublisherID, age=age)
         for key in expiredKeys:
             #print '    expiring key:', key
             del self._dataStore[key]
