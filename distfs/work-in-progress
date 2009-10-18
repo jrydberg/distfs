@@ -1,0 +1,182 @@
+
+class AMPOption(usage.Options):
+    """
+    Special version of usage.Options that has extra functionality for
+    talking to a remote instance of the file-system server.
+    """
+
+    def splitLocation(self, entity):
+        """
+        Split C{entity} into a location name and an absolute path.
+
+        Return a sequence with two elements; location and path.
+        """
+        components = entity.split('/', 1)
+        if len(components) == 1:
+            components.append('/')
+        return components
+
+
+class List(AMPOptions):
+
+    def parseArgs(self, location=None):
+        self.location = location
+
+    def postOptions(self):
+        """
+        List the specified location.
+        """
+        if not self.location:
+            # the user did not specify a location, which means that we
+            # should list all connected locations.
+            return
+        
+        # split location into connection and path and try to
+        # connect to the running server.
+        location, path = self.splitLocation(self.location)
+
+
+class CopyIn(usage.Options):
+
+
+        
+
+class CopyOut(usage.Options):
+    pass
+
+
+class MakeDir(usage.Options):
+    pass
+
+
+
+class _DirectoryNode:
+    nodeType = 'dir'
+
+    def __init__(self):
+        self.children = {}
+
+    def lookup(self, name):
+        return self.children.get(name, None)
+
+    def describe(self):
+        return {'file-type': 'dir'}
+
+    def link(self, name, size, content):
+        """
+        """
+
+    def unlink(self, name):
+        del self.children[name]
+        
+
+class _FileNode:
+    nodeType = 'file'
+
+    def __init__(self, size, content):
+        self.size = size
+        self.content = content
+
+    def lookup(self, name):
+        return None
+
+    def describe(self):
+        return {'file-size': self.size}
+
+
+class _MemoryService(_DirectoryNode):
+
+    def __init__(self):
+        _DirectoryNode.__init_(self)
+
+    def create(self, path, size, content):
+        """
+        Content.
+        """
+        current, filename = self._lookupDir(path)
+        current.link(filename, _FileNode(size, content))
+        return {}
+
+    def _lookupNode(self, path):
+        elements = path.split('/')
+        current = self
+        for element in elements:
+            current = current.lookup(element)
+            if not current:
+                raise Exception("FEL")
+        return current
+
+    def _lookupDir(self, path):
+        elements = path.split('/')
+        current = self
+        for element in elements[:-1]:
+            current = current.lookup(element)
+            if not current:
+                raise Exception("FEL")
+        return current, elements[-1]
+
+    def unlink(self, path):
+        """
+        """
+        current, filename = self._lookupDir(path)
+        current.unlink(filename)
+
+    def list(self, path):
+        """
+        List content of directory.
+        """
+        current = self._lookupNode(path)
+        result = []
+        for filename, child in current.children.iteritems():
+            d = child.describe()
+            d['file-name'] = filename
+            d['file-type'] = child.nodeType
+            result.append(d)
+        return result
+        
+
+class Describe(amp.Command):
+    arguments = [('path', amp.String())]
+    response = [('content', chunkList)]
+
+
+class List(amp.Command):
+    """
+    List content of specified directory.
+    """
+    arguments = [('path', amp.String())]
+    response = [('list', nodeAttributes)]
+
+
+class Create(amp.Command):
+    """
+    Publish a new file.
+    """
+    arguments = [('path', amp.String()),
+                 ('size', amp.Integer()),
+                 ('content', chunkList)]
+
+
+class Unlink(amp.Command):
+    arguments = [('path', amp.String())]
+    
+
+class MakeDirectory(amp.Command):
+    arguments = [('path', amp.String())]
+
+
+
+
+
+chunkList = amp.AmpList([('chunkName', amp.String())])
+
+nodeAttributes = amp.AmpList(
+    [('file-name', amp.String()),
+     ('file-type', amp.String()),
+     ('file-size', amp.Integer(optinal=True))
+    ])
+
+
+
+
+UnauthorizedLogin
